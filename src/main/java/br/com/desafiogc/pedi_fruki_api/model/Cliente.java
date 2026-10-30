@@ -9,6 +9,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 import java.time.OffsetDateTime;
+import br.valueobject.*;
 
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
@@ -45,4 +46,17 @@ public class Cliente {
 
     @Column(name = "id_cidade")
     private Integer idCidade;
+
+    //Converte o CNPJ do banco para um valor validado
+    public Cnpj getCnpjValor() {
+        if (cnpj == null || cnpj.isBlank()) {
+            return null;
+        }
+        return new Cnpj(cnpj);
+    }
+
+    //Constrói o perfil de recomendação sem criar colunas adicionais no banco
+    public PerfilComercial getPerfilComercial() {
+        return new PerfilComercial(segmento, subsegmento);
+    }
 }
