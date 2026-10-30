@@ -3,6 +3,7 @@ package br.com.desafiogc.pedi_fruki_api.service;
 import br.com.desafiogc.pedi_fruki_api.dto.*;
 import br.com.desafiogc.pedi_fruki_api.model.*;
 import br.com.desafiogc.pedi_fruki_api.repository.*;
+import br.valueobject.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -10,10 +11,12 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Instant;
 import java.time.Duration;
+import java.util.Iterator;
 import java.util.Map;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+
 
 @Service
 @RequiredArgsConstructor
@@ -25,14 +28,20 @@ public class SimulacaoSessaoService {
     private final Map<String, Sessao> sessoes = new ConcurrentHashMap<>();
 
     public IdentificarClienteResponse identificar(String identificador) {
-        String somenteDigitos = identificador == null ? "" : identificador.replaceAll("\\D", "");
+        String somenteDigitos = "";
+        if (identificador != null) {
+            somenteDigitos = identificador.replaceAll("\\D", "");
+        }
         if (somenteDigitos.isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "Informe um CNPJ com 14 dígitos ou o código numérico do cliente.");
         }
+
         Cliente cliente;
         if (somenteDigitos.length() == 14) {
-            cliente = clientes.findPorCnpjNormalizado(somenteDigitos).orElse(null);
+            // O Value Object valida o formato; o repository continua consultando o banco.
+            Cnpj cnpj = new Cnpj(somenteDigitos);
+            cliente = clientes.findPorCnpjNormalizado(cnpj.getNumero()).orElse(null);
             if (cliente == null) {
                 throw clienteNaoEncontrado();
             }
@@ -87,12 +96,17 @@ public class SimulacaoSessaoService {
     private void expurgarSessoesExpiradas() {
         Instant agora = Instant.now();
         List<String> tokensExpirados = new java.util.ArrayList<>();
-        for (Map.Entry<String, Sessao> entrada : sessoes.entrySet()) {
+        // Itera sobre o mapa sem for-each. Primeiro identifica as sessões vencidas.
+        Iterator<Map.Entry<String, Sessao>> iteradorSessoes = sessoes.entrySet().iterator();
+        while (iteradorSessoes.hasNext()) {
+            Map.Entry<String, Sessao> entrada = iteradorSessoes.next();
             if (entrada.getValue().expiraEm().isBefore(agora)) {
                 tokensExpirados.add(entrada.getKey());
             }
         }
-        for (String token : tokensExpirados) {
+        // Remove os tokens em um segundo passo, usando os índices da lista.
+        for (int indice = 0; indice < tokensExpirados.size(); indice++) {
+            String token = tokensExpirados.get(indice);
             sessoes.remove(token);
         }
     }
