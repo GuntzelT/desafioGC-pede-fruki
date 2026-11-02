@@ -11,7 +11,7 @@ import lombok.NoArgsConstructor;
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Entity
-@Table(name = "hierarquia", schema = "public")
+@Table(name = "hierarquia_superintendente", schema = "public")
 public class Hierarquia {
     @Id
     @Column(name = "id_hierarquia")
