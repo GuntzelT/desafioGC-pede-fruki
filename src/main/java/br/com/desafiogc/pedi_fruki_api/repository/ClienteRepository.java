@@ -23,4 +23,7 @@ public interface ClienteRepository extends JpaRepository<Cliente, Integer> {
             LIMIT 1
             """, nativeQuery = true)
     Optional<Cliente> findPorCnpjNormalizado(@Param("cnpj") String cnpj);
+
+    // Carteira de clientes de um vendedor (cliente.id_hierarquia)
+    List<Cliente> findByIdHierarquiaOrderByNomeAsc(Integer idHierarquia);
 }
