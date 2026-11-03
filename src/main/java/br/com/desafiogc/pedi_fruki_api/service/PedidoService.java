@@ -3,19 +3,17 @@ package br.com.desafiogc.pedi_fruki_api.service;
 import br.com.desafiogc.pedi_fruki_api.dto.*;
 import br.com.desafiogc.pedi_fruki_api.model.*;
 import br.com.desafiogc.pedi_fruki_api.repository.*;
+import br.valueobject.PerfilComercial;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.core.ResultSetExtractor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.sql.ResultSet;
-import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -57,6 +55,10 @@ public class PedidoService {
         if (cliente == null) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Cliente da sessão não existe mais.");
         }
+        if (request == null || request.itens() == null || request.itens().isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Adicione pelo menos um produto ao pedido.");
+        }
         List<ItemPedidoRequest> itens = request.itens();
 
         Set<Integer> idsProdutos = new HashSet<>();
@@ -65,26 +67,38 @@ public class PedidoService {
         
         for (int i = 0; i < itens.size(); i++) {
             ItemPedidoRequest item = itens.get(i);
+            if (item == null || item.produtoId() == null || item.produtoId() <= 0) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "Cada item deve informar um produto válido.");
+            }
             if (!idsProdutos.add(item.produtoId())) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                         "Cada produto deve aparecer apenas uma vez no pedido. Some as quantidades repetidas.");
             }
         }
+        // A soma de fardos é uma validação do fluxo do pedido; não precisa de Value Object.
+        // Usamos long para evitar estouro durante a soma e só convertemos para int após validar.
         long quantidadeTotalLong = 0L;
-        
-        // Soma a quantidade de fardos, elemento por elemento.
-        
+
         for (int i = 0; i < itens.size(); i++) {
             ItemPedidoRequest item = itens.get(i);
+            if (item == null || item.quantidade() == null || item.quantidade() <= 0) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "A quantidade de cada item deve ser positiva.");
+            }
             quantidadeTotalLong += item.quantidade();
+            if (quantidadeTotalLong > Integer.MAX_VALUE) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "A quantidade total do pedido é muito grande.");
+            }
         }
+
         if (quantidadeTotalLong < quantidadeMinimaPedido) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "O pedido mínimo é de " + quantidadeMinimaPedido + " fardos. Quantidade atual: " + quantidadeTotalLong + ".");
+                    "O pedido mínimo é de " + quantidadeMinimaPedido +
+                    " fardos. Quantidade atual: " + quantidadeTotalLong + ".");
         }
-        if (quantidadeTotalLong > Integer.MAX_VALUE) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "A quantidade total do pedido é muito grande.");
-        }
+        int quantidadeTotal = (int) quantidadeTotalLong;
 
         Map<Integer, Produto> produtosPorId = new HashMap<>();
         List<Produto> encontrados = produtos.findAllById(idsProdutos);
@@ -112,7 +126,7 @@ public class PedidoService {
 
         // O PerfilComercial concentra a regra de identificação de atacado.
 
-        boolean atacado = cliente.getPerfilComercial().ehAtacado();
+        PerfilComercial perfil = cliente.getPerfilComercial();
         OffsetDateTime agora = OffsetDateTime.now(ZoneOffset.UTC);
 
         Map<Integer, BigDecimal> precosFinais = new HashMap<>();
@@ -124,12 +138,8 @@ public class PedidoService {
         for (int i = 0; i < itens.size(); i++) {
             ItemPedidoRequest item = itens.get(i);
             Produto produto = produtosPorId.get(item.produtoId());
-            BigDecimal preco;
-            if (atacado) {
-                preco = produto.getPrecoMinimo();
-            } else {
-                preco = produto.getPrecoBase();
-            }
+            // A entidade Produto seleciona o preço usando PerfilComercial.
+            BigDecimal preco = produto.precoPara(perfil);
             if (preco == null || preco.signum() < 0) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT,
                         "O produto '" + produto.getNome() + "' não possui preço válido cadastrado.");
@@ -217,19 +227,20 @@ public class PedidoService {
                 Timestamp.from(agora.toInstant()), idCliente);
 
         notificacaoService.publicarConfirmacaoPedido(cliente, idPedido,
-                (int) quantidadeTotalLong, valorTotal, agora);
+                quantidadeTotal, valorTotal, agora);
         ClienteResumoDto resumoAtualizado = clienteService.buscarResumo(idCliente);
         ClienteResumoDto resumo = new ClienteResumoDto(
                 resumoAtualizado.idCliente(), resumoAtualizado.nome(), resumoAtualizado.segmento(),
                 resumoAtualizado.subsegmento(), resumoAtualizado.cidade(), resumoAtualizado.uf(), agora);
+        // Publicar evento não significa que o e-mail já foi entregue.
         String mensagem;
         if (estoqueAtualizado) {
-            mensagem = "Pedido salvo e estoque atualizado. Evento n8n será processado após a transação, se habilitado.";
+            mensagem = "Pedido salvo e estoque atualizado. A confirmação por e-mail via Resend será tentada após a transação, se configurada.";
         } else {
-            mensagem = "Pedido salvo. Confira as observações de estoque; n8n é opcional.";
+            mensagem = "Pedido salvo. Confira as observações de estoque; o envio pelo Resend é opcional.";
         }
         return new PedidoCriadoResponse(idPedido, agora, resumo, List.copyOf(itensResposta),
-                (int) quantidadeTotalLong, valorTotal, mensagem, true, estoqueAtualizado,
+                quantidadeTotal, valorTotal, mensagem, true, estoqueAtualizado,
                 List.copyOf(observacoes));
     }
 
@@ -290,50 +301,29 @@ public class PedidoService {
     }
 
     
+    /**
+     * O SQL recebido não declara IDENTITY nem SERIAL para pedido_id.
+     * Portanto, sob trava de tabela, obtemos o próximo ID e inserimos explicitamente.
+     * Importante: para alto volume de escrita, o melhor é configurar sequência no banco.
+     */
     private Integer inserirCabecalhoComIdSeguro(Integer idCliente, OffsetDateTime dataPedido) {
+        // A trava é mantida até o final da transação @Transactional.
         jdbcTemplate.execute("LOCK TABLE public.pedido IN EXCLUSIVE MODE");
-        Long maxId = jdbcTemplate.queryForObject("SELECT COALESCE(MAX(pedido_id), 0) FROM public.pedido", Long.class);
-        if (maxId == null) maxId = 0L;
-        String sequencia = jdbcTemplate.queryForObject(
-                "SELECT pg_get_serial_sequence('public.pedido', 'pedido_id')", String.class);
-        if (sequencia != null && !sequencia.isBlank()) {
-            String semAspas = sequencia.replace("\"", "");
-            int ultimoPonto = semAspas.lastIndexOf('.');
-            String esquemaSequencia;
-            String nomeSequencia;
-            if (ultimoPonto >= 0) {
-                esquemaSequencia = semAspas.substring(0, ultimoPonto);
-                nomeSequencia = semAspas.substring(ultimoPonto + 1);
-            } else {
-                esquemaSequencia = "public";
-                nomeSequencia = semAspas;
-            }
-            Long valorAtualSequencia = jdbcTemplate.query(
-                    "SELECT last_value FROM pg_sequences WHERE schemaname = ? AND sequencename = ?",
-                    new ResultSetExtractor<Long>() {
-                        @Override
-                        public Long extractData(ResultSet resultado) throws SQLException {
-                            if (resultado.next()) {
-                                return resultado.getObject("last_value", Long.class);
-                            }
-                            return null;
-                        }
-                    }, esquemaSequencia, nomeSequencia);
-            if (maxId > 0 && (valorAtualSequencia == null || valorAtualSequencia <= maxId)) {
-                jdbcTemplate.queryForObject("SELECT setval(CAST(? AS regclass), ?, true)", Long.class, sequencia, maxId);
-            }
-            return jdbcTemplate.queryForObject("""
-                    INSERT INTO public.pedido (data_pedido, id_cliente)
-                    VALUES (?, ?)
-                    RETURNING pedido_id
-                    """, Integer.class, Timestamp.from(dataPedido.toInstant()), idCliente);
+        Long maiorId = jdbcTemplate.queryForObject(
+                "SELECT COALESCE(MAX(pedido_id), 0) FROM public.pedido", Long.class);
+        if (maiorId == null) {
+            maiorId = 0L;
         }
-        long proximo = maxId + 1L;
-        if (proximo > Integer.MAX_VALUE) throw new ResponseStatusException(HttpStatus.CONFLICT,
-                "O campo pedido_id excedeu a capacidade de um número inteiro.");
-        int id = (int) proximo;
-        jdbcTemplate.update("INSERT INTO public.pedido (pedido_id, data_pedido, id_cliente) VALUES (?, ?, ?)",
-                id, Timestamp.from(dataPedido.toInstant()), idCliente);
+        long proximoId = maiorId + 1L;
+        if (proximoId > Integer.MAX_VALUE) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "O campo pedido_id excedeu a capacidade de um inteiro.");
+        }
+        int id = (int) proximoId;
+        jdbcTemplate.update("""
+                INSERT INTO public.pedido (pedido_id, data_pedido, id_cliente)
+                VALUES (?, ?, ?)
+                """, id, Timestamp.from(dataPedido.toInstant()), idCliente);
         return id;
     }
 }

@@ -21,6 +21,10 @@ public final class PerfilComercial {
         return subsegmento;
     }
 
+    public boolean temSegmentacaoCompleta() {
+        return !segmento.isBlank() && !subsegmento.isBlank();
+    }
+
     public boolean ehAtacado() {
         return segmento.contains("atacado");
     }

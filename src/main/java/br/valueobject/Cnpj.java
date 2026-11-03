@@ -2,7 +2,7 @@ package br.valueobject;
 
 import java.util.Objects;
 
-//normalização e validação de formato do CNPJ. */
+/** Value Object de CNPJ: remove pontuação e exige 14 dígitos. Não valida os dígitos verificadores. */
 public final class Cnpj {
     private final String numero;
 

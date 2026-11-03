@@ -3,7 +3,7 @@ package br.com.desafiogc.pedi_fruki_api.service;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 
-//Evento criado na mesma transação do pedido e processado pelo n8n somente após o commit.
+//Evento criado na mesma transação do pedido e tratado pelo listener de e-mail após o commit.
 public record PedidoConfirmadoEvent(
         Integer pedidoId,
         Integer clienteId,

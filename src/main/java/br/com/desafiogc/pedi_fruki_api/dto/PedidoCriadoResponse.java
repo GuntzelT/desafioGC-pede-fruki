@@ -12,7 +12,7 @@ public record PedidoCriadoResponse(
         Integer quantidadeTotal,
         BigDecimal valorTotal,
         String mensagem,
-        Boolean eventoN8nGerado,
+        Boolean eventoConfirmacaoPublicado,
         Boolean estoqueAtualizado,
         List<String> observacoes
 ) {}

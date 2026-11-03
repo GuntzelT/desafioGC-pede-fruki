@@ -3,7 +3,7 @@ package br.com.desafiogc.pedi_fruki_api.service;
 import br.com.desafiogc.pedi_fruki_api.dto.*;
 import br.com.desafiogc.pedi_fruki_api.model.*;
 import br.com.desafiogc.pedi_fruki_api.repository.*;
-import br.valueobject.*;
+import br.valueobject.Cnpj;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -28,33 +28,43 @@ public class SimulacaoSessaoService {
     private final Map<String, Sessao> sessoes = new ConcurrentHashMap<>();
 
     public IdentificarClienteResponse identificar(String identificador) {
+        // Interpreta o valor digitado no WhatsApp simulado sem criar outro Value Object.
+        // CNPJ tem 14 dígitos; um código menor é tratado como ID numérico do cliente.
         String somenteDigitos = "";
         if (identificador != null) {
-            somenteDigitos = identificador.replaceAll("\\D", "");
+            somenteDigitos = identificador.replaceAll("[^0-9]", "");
         }
         if (somenteDigitos.isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "Informe um CNPJ com 14 dígitos ou o código numérico do cliente.");
+                    "Informe um CNPJ com 14 dígitos ou o ID do cliente.");
         }
 
         Cliente cliente;
         if (somenteDigitos.length() == 14) {
-            // O Value Object valida o formato; o repository continua consultando o banco.
-            Cnpj cnpj = new Cnpj(somenteDigitos);
-            cliente = clientes.findPorCnpjNormalizado(cnpj.getNumero()).orElse(null);
-            if (cliente == null) {
-                throw clienteNaoEncontrado();
-            }
-        } else {
+            // O Value Object Cnpj valida e guarda o número normalizado.
+            Cnpj cnpj;
             try {
-                Integer id = Integer.valueOf(somenteDigitos);
-                cliente = clientes.findById(id).orElse(null);
-                if (cliente == null) {
-                    throw clienteNaoEncontrado();
-                }
-            } catch (NumberFormatException ex) {
-                throw clienteNaoEncontrado();
+                cnpj = new Cnpj(somenteDigitos);
+            } catch (IllegalArgumentException erro) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, erro.getMessage());
             }
+            cliente = clientes.findPorCnpjNormalizado(cnpj.getNumero()).orElse(null);
+        } else {
+            int id;
+            try {
+                id = Integer.parseInt(somenteDigitos);
+            } catch (NumberFormatException erro) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "O código do cliente não é um inteiro válido.");
+            }
+            if (id <= 0) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "O ID do cliente deve ser positivo.");
+            }
+            cliente = clientes.findById(id).orElse(null);
+        }
+        if (cliente == null) {
+            throw clienteNaoEncontrado();
         }
 
         expurgarSessoesExpiradas();

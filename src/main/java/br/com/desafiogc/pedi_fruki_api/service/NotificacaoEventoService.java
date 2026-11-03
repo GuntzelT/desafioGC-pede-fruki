@@ -9,7 +9,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.OffsetDateTime;
 
-//Publica evento em memória durante a transação; n8n é chamado somente após o commit.
+//Publica evento em memória durante a transação; o listener do Resend é chamado somente após o commit.
 @Service
 @RequiredArgsConstructor
 public class NotificacaoEventoService {

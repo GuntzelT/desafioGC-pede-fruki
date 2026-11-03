@@ -1,0 +1,28 @@
+package br.com.desafiogc.pedi_fruki_api.valueobject;
+
+import br.valueobject.Cnpj;
+import br.valueobject.PerfilComercial;
+import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+/** Testes dos dois únicos Value Objects do Pede Fruki. */
+class ValueObjectsTest {
+
+    @Test
+    void cnpjRemoveAPontuacao() {
+        Cnpj cnpj = new Cnpj("12.345.678/0001-95");
+        assertEquals("12345678000195", cnpj.getNumero());
+    }
+
+    @Test
+    void perfilComercialIdentificaAtacado() {
+        PerfilComercial atacado = new PerfilComercial("Atacado", "Mercado");
+        PerfilComercial varejo = new PerfilComercial("Varejo", "Mercado");
+        assertTrue(atacado.ehAtacado());
+        assertFalse(varejo.ehAtacado());
+        assertTrue(atacado.temSegmentacaoCompleta());
+        assertEquals("mercado", atacado.getSubsegmento());
+    }
+}

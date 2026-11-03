@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0c573d">
+  <title>Fruki | Central de Recomendações</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <a class="brand" href="#" aria-label="Fruki início">
+        <span class="brand-mark">F</span>
+        <span><strong>fruki</strong><small>Central de recomendações</small></span>
+      </a>
+      <div class="workspace-label">WORKSPACE</div>
+      <nav class="side-nav" aria-label="Navegação principal">
+        <button class="nav-item active" data-tab="seller"><span class="nav-icon">▦</span> Visão do vendedor</button>
+        <button class="nav-item" data-tab="seller-app"><span class="nav-icon">▣</span> App do vendedor</button>
+        <button class="nav-item" data-tab="whatsapp"><span class="nav-icon">◉</span> Pede Fruki / WhatsApp</button>
+      </nav>
+      <div class="sidebar-bottom">
+        <div class="status-dot"></div>
+        <div><strong>Ambiente de demonstração</strong><small>Dados fictícios para o MVP</small></div>
+      </div>
+    </aside>
+
+    <main class="main-content">
+      <header class="topbar">
+        <div>
+          <div class="eyebrow">FRUKI · PROJETO DE RECOMENDAÇÃO</div>
+          <h1 id="page-title">Visão do vendedor</h1>
+        </div>
+        <div class="topbar-right">
+          <span class="demo-pill"><span></span> MVP demonstrativo</span>
+          <div class="avatar">JV</div>
+        </div>
+      </header>
+
+      <div id="connection-banner" class="connection-banner" role="status">
+        <span class="banner-icon">ⓘ</span>
+        <span><strong>Modo demonstração ativo.</strong> A interface usa dados fictícios até a API Java estar conectada.</span>
+        <button id="configure-api" class="text-button">Configurar API</button>
+      </div>
+
+      <section id="api-settings" class="api-settings hidden" aria-label="Configuração da API">
+        <div class="settings-copy">
+          <strong>Conectar ao backend Spring Boot</strong>
+          <p>Informe a URL base da API. Exemplo: <code>http://localhost:8080</code></p>
+        </div>
+        <div class="settings-form">
+          <input id="api-url" type="url" placeholder="http://localhost:8080" value="http://localhost:8080">
+          <button id="save-api" class="btn btn-primary">Salvar e testar</button>
+        </div>
+        <p id="api-status" class="api-status" aria-live="polite">O modo demonstração continuará disponível se a API ainda não estiver pronta.</p>
+      </section>
+
+      <section id="seller-view" class="view">
+        <div class="page-intro">
+          <div>
+            <h2>Recomendações personalizadas</h2>
+            <p>Transforme dados e contexto de cada cliente em recomendações para a equipe de vendas.</p>
+          </div>
+          <div class="last-updated"><span class="pulse"></span> Atualizado agora</div>
+        </div>
+
+        <div class="customer-toolbar panel">
+          <div class="customer-select-wrap">
+            <label for="customer-select">CLIENTE SELECIONADO</label>
+            <select id="customer-select">
+              <option value="1001">Mercado Bom Vizinho</option>
+              <option value="1002">Mini Mercado Central</option>
+              <option value="1003">Supermercado Estação</option>
+            </select>
+          </div>
+          <div class="customer-meta">
+            <span class="meta-label">PERFIL</span>
+            <strong id="customer-profile">Mercado de bairro</strong>
+          </div>
+          <div class="customer-meta">
+            <span class="meta-label">CIDADE</span>
+            <strong id="customer-city">Lajeado, RS</strong>
+          </div>
+          <button id="refresh-recommendations" class="btn btn-primary"><span>↻</span> Atualizar recomendações</button>
+        </div>
+
+        <div class="metrics-grid">
+          <article class="metric-card">
+            <div class="metric-top"><span>Produtos sugeridos</span><span class="metric-icon mint">✳</span></div>
+            <div class="metric-value" id="metric-products">4</div>
+            <div class="metric-foot">Ordenados por prioridade</div>
+          </article>
+          <article class="metric-card">
+            <div class="metric-top"><span>Oportunidade de portfólio</span><span class="metric-icon lilac">↗</span></div>
+            <div class="metric-value" id="metric-new">3 <small>produtos</small></div>
+            <div class="metric-foot">Ainda não comprados no histórico simulado</div>
+          </article>
+          <article class="metric-card">
+            <div class="metric-top"><span>Principal sinal</span><span class="metric-icon peach">◎</span></div>
+            <div class="metric-value compact" id="metric-signal">Perfil da loja</div>
+            <div class="metric-foot">Fator com maior influência neste exemplo</div>
+          </article>
+        </div>
+
+        <div class="section-heading">
+          <div><h3>Ranking de recomendações</h3><p>Por que cada produto pode fazer sentido para este cliente?</p></div>
+          <span class="sort-label">MAIOR PRIORIDADE PRIMEIRO ↓</span>
+        </div>
+        <div id="recommendation-list" class="recommendation-list"></div>
+        <div class="disclaimer">Com a API conectada, pontuação e justificativas vêm do backend; sem conexão, são exibidos dados fictícios de demonstração.</div>
+      </section>
+
+      <section id="seller-app-view" class="view hidden">
+        <div class="page-intro">
+          <div>
+            <h2>App do vendedor</h2>
+            <p>Protótipo de atendimento ao PDV baseado no fluxo móvel do vídeo de referência.</p>
+          </div>
+          <span class="demo-pill"><span></span> Aplicativo simulado</span>
+        </div>
+        <div class="seller-app-layout">
+          <section class="seller-device">
+            <div class="seller-device-top"><span class="device-dot"></span><span>FRUKI BEBIDAS</span><span class="device-status">● Online</span></div>
+            <div class="seller-app-header">
+              <div class="seller-app-logo">F</div>
+              <div><strong>Atendimento PDV</strong><small>Força de vendas · Fruki</small></div>
+              <button class="seller-icon-button" id="seller-app-refresh" aria-label="Atualizar dados">↻</button>
+            </div>
+            <div class="seller-app-content" id="seller-app-home">
+              <div class="seller-pdv-card">
+                <span class="seller-card-label">PONTO DE VENDA SELECIONADO</span>
+                <label for="seller-app-client-select">Cliente</label>
+                <select id="seller-app-client-select">
+                  <option value="1001">Mercado Bom Vizinho</option>
+                  <option value="1002">Mini Mercado Central</option>
+                  <option value="1003">Supermercado Estação</option>
+                </select>
+                <strong id="seller-app-customer-name">Mercado Bom Vizinho</strong>
+                <p id="seller-app-customer-profile">Mercado de bairro · Lajeado, RS</p>
+                <div class="seller-pdv-meta"><span><small>Segmento</small><b id="seller-app-segment">Varejo</b></span><span><small>ID do PDV</small><b id="seller-app-customer-id">1001</b></span></div>
+              </div>
+              <div class="seller-app-shortcuts">
+                <button class="seller-shortcut featured" data-seller-action="mix"><span>▦</span><strong>Mix recomendado</strong><small>Produtos sugeridos</small></button>
+                <button class="seller-shortcut" data-seller-action="notifications"><span>♧</span><strong>Pedidos recentes</strong><small>Histórico de vendas</small></button>
+                <button class="seller-shortcut" data-seller-action="history"><span>◷</span><strong>Histórico</strong><small>Compras do PDV</small></button>
+                <button class="seller-shortcut" data-seller-action="client"><span>⌂</span><strong>Dados do PDV</strong><small>Perfil comercial</small></button>
+              </div>
+              <button class="seller-start-button" id="seller-app-start">Iniciar atendimento <span>→</span></button>
+              <p class="seller-app-footnote">Demonstração. Os dados reais vêm da API quando conectada.</p>
+            </div>
+            <div class="seller-app-content hidden" id="seller-app-mix-screen">
+              <button class="seller-app-back" id="seller-app-back">‹ Atendimento PDV</button>
+              <div class="seller-mix-title"><div><span class="seller-card-label">SUGESTÕES PERSONALIZADAS</span><h3>Mix do PDV</h3><p id="seller-app-mix-subtitle">Produtos ranqueados pelo motor de recomendação.</p></div><span class="seller-score-badge">IA + dados</span></div>
+              <div id="seller-app-mix-list" class="seller-app-mix-list"></div>
+              <div class="seller-mix-actions"><button class="seller-secondary-button" id="seller-app-back-bottom">Voltar</button><button class="seller-start-button" id="seller-app-open-whatsapp">Continuar no Pede Fruki <span>→</span></button></div>
+              <p class="seller-app-footnote">Preço de catálogo por segmento. Promoções não fazem parte desta versão.</p>
+            </div>
+            <div class="seller-app-content hidden" id="seller-app-notifications-screen">
+              <button class="seller-app-back" id="seller-app-notifications-back">‹ Atendimento PDV</button>
+              <div class="seller-mix-title"><div><span class="seller-card-label">CENTRAL DO VENDEDOR</span><h3>Pedidos recentes</h3><p>Histórico de pedidos do Supabase. E-mails do Resend não são armazenados nesta aplicação.</p></div></div>
+              <div id="seller-app-notification-list" class="seller-app-notification-list"><p class="seller-app-empty">Carregue os pedidos do cliente selecionado.</p></div>
+              <button class="seller-start-button" id="seller-app-reload-notifications">Atualizar pedidos <span>↻</span></button>
+            </div>
+          </section>
+          <aside class="seller-app-side panel">
+            <div class="info-icon">▣</div>
+            <h3>Fluxo do app</h3>
+            <p>O vendedor seleciona o PDV, inicia o atendimento e consulta o mix priorizado pelo mesmo motor usado na simulação do Pede Fruki.</p>
+            <div class="info-divider"></div>
+            <div class="info-row"><span>Entrada</span><strong>Cliente, segmento e subsegmento</strong></div>
+            <div class="info-row"><span>Ranking</span><strong>Histórico + perfil + clima + calendário</strong></div>
+            <div class="info-row"><span>Notificações</span><strong>Resend por e-mail, sem histórico no Supabase</strong></div>
+            <div class="note-box">A tela de app é uma simulação navegável. A autenticação e a autorização por vendedor precisam ser implementadas antes de disponibilizar endpoints externamente.</div>
+          </aside>
+        </div>
+      </section>
+
+      <section id="whatsapp-view" class="view hidden">
+        <div class="page-intro">
+          <div>
+            <h2>Experiência do cliente</h2>
+            <p>Uma simulação de como recomendações podem aparecer no canal Pede Fruki.</p>
+          </div>
+          <span class="demo-pill"><span></span> Conversa simulada</span>
+        </div>
+        <div class="chat-layout">
+          <section class="chat-panel phone-chat-panel">
+            <header class="chat-header phone-chat-header">
+              <button id="reset-chat" class="phone-back" title="Voltar ao início" aria-label="Voltar ao início">‹</button>
+              <div class="chat-brand-avatar">fruki</div>
+              <div class="chat-contact"><strong>Pede Fruki <span class="verified-mark">✓</span></strong><small>Conta comercial</small></div>
+              <button id="catalog-open" class="phone-head-action" title="Abrir catálogo" aria-label="Abrir catálogo">▣</button>
+              <button id="cart-open" class="phone-head-action cart-head" title="Ver carrinho" aria-label="Ver carrinho">🛒<span id="cart-count">0</span></button>
+              <button id="phone-menu" class="phone-head-action" title="Mais opções" aria-label="Mais opções">⋮</button>
+            </header>
+            <div id="chat-screen-body" class="chat-screen-body">
+              <div class="chat-messages phone-messages" id="chat-messages">
+                <div class="chat-date">HOJE</div>
+                <div class="message received"><p>Olá! 👋 Analisei o perfil da sua loja e preparei sugestões para ajudar no seu próximo pedido.</p><time>09:41</time></div>
+                <div id="chat-products" class="chat-product-list"></div>
+                <div class="weekly-card">
+                  <div class="weekly-kicker"><span class="weekly-icon">✧</span><span>RECOMENDADO PARA O SEU NEGÓCIO</span></div>
+                  <h3>Sugestões inteligentes da semana</h3>
+                  <div class="context-chips"><span>☀️ Clima</span><span>🏪 Perfil</span><span>↗ Histórico recente</span></div>
+                  <div id="weekly-products" class="weekly-products"></div>
+                  <p class="minimum-note"><strong>Pedido mínimo B2B:</strong> 200 fardos. Sugestões personalizadas para o seu negócio.</p>
+                </div>
+                <button id="chat-add" class="chat-cta"><span>↪</span> Adicionar sugestões ao carrinho</button>
+                <button id="talk-seller" class="chat-cta secondary-cta"><span>↪</span> Falar com vendedor</button>
+                <div class="whatsapp-feature-card reminder-preview">
+                  <div class="feature-copy"><strong>📌 Contexto comercial</strong><p>Consulte lembretes e informações contextuais associados ao cliente.</p></div>
+                  <button id="reminders-open" class="chat-cta feature-cta">▦ &nbsp; Ver lembretes</button>
+                </div>
+                <div class="whatsapp-feature-card catalog-preview">
+                  <div class="catalog-mini-products"><span>💧</span><span>🥤</span><span>⚡</span><span>🍊</span></div>
+                  <div class="feature-copy"><strong>Catálogo Pede Fruki</strong><p>Produtos ativos do catálogo · pedido mínimo de 200 fardos</p></div>
+                  <button id="catalog-open-inline" class="chat-cta feature-cta">▣ &nbsp; Ver catálogo</button>
+                </div>
+                <div class="message received"><p>Posso ajudar com recomendações, catálogo, lembretes ou com seu carrinho. 😊</p><time>09:42</time></div>
+              </div>
+            </div>
+            <div class="chat-actions phone-quick-actions">
+              <button id="chat-more" class="quick-reply">Ver sugestões</button>
+              <button id="chat-finish" class="quick-reply">Finalizar pedido</button>
+            </div>
+            <div id="chat-feedback" class="chat-feedback">Conversa simulada. O pedido é persistido no Supabase; se configurado, o Resend recebe solicitação de e-mail após a confirmação.</div>
+            <div class="chat-composer phone-composer"><input id="chat-input" type="text" aria-label="Mensagem para o Pede Fruki" placeholder="Digite CNPJ ou código do cliente…" autocomplete="off"><button id="send-chat" aria-label="Enviar mensagem">➤</button></div>
+          </section>
+          <aside class="chat-info panel">
+            <div class="info-icon">✳</div>
+            <h3>Recomendação com contexto</h3>
+            <p>A experiência usa o mesmo conjunto de recomendações da tela do vendedor. Assim, a regra de negócio fica no backend e os canais apenas apresentam o resultado.</p>
+            <div class="info-divider"></div>
+            <div class="info-row"><span>Cliente</span><strong id="chat-customer-name">Mercado Bom Vizinho</strong></div>
+            <div class="info-row"><span>Canal</span><strong>Pede Fruki / WhatsApp</strong></div>
+            <div class="info-row"><span>Notificações</span><strong class="pending">E-mail Resend opcional</strong></div>
+            <div class="note-box">A conversa de WhatsApp é simulada. Quando configurado, o backend solicita ao Resend um e-mail para o endereço de demonstração; o Resend não envia mensagens de WhatsApp nem push para o app do vendedor.</div>
+          </aside>
+        </div>
+      </section>
+
+      <footer class="footer"><span>FRUKI · PROTÓTIPO DE EXPERIÊNCIA</span><span>Construído para demonstração do MVP</span></footer>
+    </main>
+  </div>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script src="app.js"></script>
+</body>
+</html>
