@@ -326,12 +326,24 @@ async function loadFromApi(customerId) {
 
 async function loadCatalogFromApi() {
   try {
-    const response = await fetch(`${apiBase.replace(/\/+$/, "")}/api/produtos`, {
-      headers: { "Accept": "application/json" }
+    const baseUrl = apiBase.replace(/\/+$/, "");
+
+    const response = await fetch(`${baseUrl}/api/produtos`, {
+      headers: {
+        "Accept": "application/json"
+      }
     });
-    if (!response.ok) throw new Error(`API respondeu HTTP ${response.status}`);
+
+    if (!response.ok) {
+      throw new Error(`API respondeu HTTP ${response.status}`);
+    }
+
     const rows = await response.json();
-    if (!Array.isArray(rows)) throw new Error("A API não retornou uma lista de produtos.");
+
+    if (!Array.isArray(rows)) {
+      throw new Error("A API não retornou uma lista de produtos.");
+    }
+
     catalogProducts = rows.map(item => ({
       id: String(item.idItem ?? item.produtoId ?? item.id),
       name: item.nome ?? item.name ?? item.nomeProduto ?? "Produto sem nome",
@@ -341,14 +353,28 @@ async function loadCatalogFromApi() {
       precoBase: item.precoBase,
       precoMinimo: item.precoMinimo
     }));
+
     catalogIsFromApi = rows.length > 0;
-    if (!catalogIsFromApi) throw new Error("O catálogo retornou vazio.");
-    $("chat-feedback").textContent = `Catálogo conectado: ${rows.length} produtos ativos do Supabase.`;
+
+    if (!catalogIsFromApi) {
+      throw new Error("O catálogo retornou vazio.");
+    }
+
+    $("chat-feedback").textContent =
+      `Catálogo conectado: ${rows.length} produtos ativos do Supabase.`;
+
     return true;
+
   } catch (error) {
     catalogIsFromApi = false;
-    $("chat-feedback").textContent = `Não foi possível carregar o catálogo real: ${error.message}`;
-    showToast("Catálogo real indisponível. Não será possível gravar pedidos com produtos fictícios.");
+
+    $("chat-feedback").textContent =
+      `Não foi possível carregar o catálogo real: ${error.message}`;
+
+    showToast(
+      "Catálogo real indisponível. Não será possível gravar pedidos com produtos fictícios."
+    );
+
     return false;
   }
 }
