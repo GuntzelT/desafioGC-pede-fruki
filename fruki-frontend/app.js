@@ -333,7 +333,7 @@ async function loadCatalogFromApi() {
     const rows = await response.json();
     if (!Array.isArray(rows)) throw new Error("A API não retornou uma lista de produtos.");
     catalogProducts = rows.map(item => ({
-      id: String(item.produtoId ?? item.produtoId ?? item.id),
+      id: String(item.idItem ?? item.produtoId ?? item.id),
       name: item.nome ?? item.name ?? item.nomeProduto ?? "Produto sem nome",
       brand: item.codFamilia ? `Família ${item.codFamilia}` : "Catálogo Fruki",
       category: item.codFamilia ? String(item.codFamilia) : "Produtos",

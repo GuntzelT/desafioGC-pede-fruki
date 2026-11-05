@@ -31,3 +31,10 @@ build/
 
 ### VS Code ###
 .vscode/
+.vscode/launch.json
+
+
+# Variáveis de ambiente e credenciais
+.env
+.env.*
+!.env.example
