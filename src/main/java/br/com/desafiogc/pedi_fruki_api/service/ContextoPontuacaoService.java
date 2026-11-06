@@ -18,12 +18,13 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Pattern;
 
 /**
- * Converte clima, feriados e sazonalidade em sinais pontuáveis POR CATEGORIA de bebida.
+ * Converte clima, feriados oficiais e sazonalidades comerciais em sinais pontuáveis
+ * por categoria de bebida.
  *
  * Fontes:
  *  - Clima: API Open-Meteo (temperatura e chuva da cidade do cliente).
- *  - Feriados nacionais: API Nager.Date, como regra geral para feriados que NÃO estão na tabela de eventos.
- *  - Eventos sazonais (Carnaval, verão, Natal etc.): tabela local em EventosSazonais, sem API.
+ *  - Feriados nacionais e estaduais: Nager.Date v3, filtrados pela UF do cliente.
+ *  - Estações e datas comerciais: regras locais calculadas no EventosSazonaisService.
  *
  * As regras são heurísticas comerciais editáveis, não previsões garantidas de venda.
  */
@@ -31,7 +32,6 @@ import java.util.regex.Pattern;
 @RequiredArgsConstructor
 public class ContextoPontuacaoService {
     private static final ZoneId FUSO = ZoneId.of("America/Sao_Paulo");
-
     private final CidadeRepository cidades;
     private final ClimaService clima;
     private final CalendarioService calendario;
@@ -65,7 +65,8 @@ public class ContextoPontuacaoService {
                 previsao = clima.previsao(cidade.getNome(), cidade.getUf());
             }
         }
-        var proximoFeriado = calendario.proximoFeriado().orElse(null);
+        // A UF do cliente filtra feriados estaduais; feriados nacionais continuam valendo para todos.
+        var proximoFeriado = calendario.proximoFeriado(uf).orElse(null);
         Integer diasFeriado = null;
         String nomeFeriado = null;
         if (proximoFeriado != null) {
@@ -121,7 +122,7 @@ public class ContextoPontuacaoService {
     }
 
     // ---------------------------------------------------------------- CALENDÁRIO (máx. 10)
-    // Vale o MAIOR entre a tabela de eventos e o feriado nacional genérico (não soma).
+    // Compara feriados oficiais e sazonalidades comerciais; não soma os dois sinais.
 
     public int pontosCalendario(Produto produto, ContextoComercial contexto) {
         return sinalCalendario(produto, contexto).pontos();
@@ -136,22 +137,25 @@ public class ContextoPontuacaoService {
         CategoriaBebidaService categoria = classificar(produto);
         LocalDate hoje = LocalDate.now(FUSO);
 
-        // 1) Eventos da tabela (Carnaval, verão, Natal, Dia dos Pais etc.), calculados localmente.
-        EventosSazonaisService.Resultado evento = EventosSazonaisService.melhorPara(categoria, hoje, contexto.uf());
-        Sinal melhor = new Sinal(evento.pontos(), evento.motivo());
+        // 1) Sazonalidades comerciais calculadas localmente: estações, Carnaval,
+        // Páscoa, Dia dos Pais e período de Natal/Réveillon.
+        EventosSazonaisService.Resultado sazonalidade = EventosSazonaisService.melhorPara(categoria, hoje);
+        Sinal melhor = new Sinal(sazonalidade.pontos(), sazonalidade.motivo());
 
-        // 2) Feriado nacional vindo da Nager.Date: cobre os que não estão na tabela
-        //    (Corpus Christi, Finados, Proclamação da República, Consciência Negra...).
+        // 2) Feriados oficiais nacionais e estaduais filtrados pela UF do cliente.
+        // Se ambos coincidirem, vale somente o maior sinal para respeitar o limite de 10.
         if (contexto.diasAteFeriado() != null) {
             int dias = contexto.diasAteFeriado();
             double fator = 0;
             if (dias <= 3) fator = 1.0;
             else if (dias <= 7) fator = 0.6;
             if (fator > 0) {
-                String nome = contexto.nomeFeriado() != null ? contexto.nomeFeriado() : "feriado nacional";
+                String nome = contexto.nomeFeriado() != null
+                        ? contexto.nomeFeriado() : "feriado nacional ou estadual";
                 int pontos = (int) Math.round(pontosFeriadoGenerico(categoria) * fator);
                 if (pontos > melhor.pontos()) {
-                    melhor = new Sinal(pontos, "proximidade de " + nome + " (em " + dias + " dia(s))");
+                    melhor = new Sinal(pontos,
+                            "proximidade de " + nome + " (em " + dias + " dia(s))");
                 }
             }
         }
@@ -160,10 +164,10 @@ public class ContextoPontuacaoService {
 
     private int pontosFeriadoGenerico(CategoriaBebidaService categoria) {
         switch (categoria) {
-            case ALCOOLICA: return 8;
-            case REFRIGERANTE: return 6;
-            case AGUA: return 6;
-            default: return 3;
+            case ALCOOLICA: return 10;
+            case REFRIGERANTE: return 8;
+            case AGUA: return 8;
+            default: return 4;
         }
     }
 

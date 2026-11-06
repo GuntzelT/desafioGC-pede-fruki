@@ -46,7 +46,7 @@ public class ContextoController {
         }
 
         return new ContextoDto(id, cidade.getNome(), cidade.getUf(),
-                clima.previsao(cidade.getNome(), cidade.getUf()), calendario.proximosFeriados(),
-                "Clima e feriados podem alterar o ranking por regras heurísticas; indisponibilidade externa apenas zera esses pontos contextuais.");
+                clima.previsao(cidade.getNome(), cidade.getUf()), calendario.proximosFeriados(cidade.getUf()),
+                "Clima, feriados nacionais/estaduais da UF do cliente e sazonalidades comerciais (estações do ano, Carnaval, Páscoa, Dia dos Pais e Natal/Réveillon) podem alterar o ranking por regras heurísticas.");
     }
 }

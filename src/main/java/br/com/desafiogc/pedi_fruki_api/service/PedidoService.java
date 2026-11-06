@@ -227,7 +227,7 @@ public class PedidoService {
                 Timestamp.from(agora.toInstant()), idCliente);
 
         notificacaoService.publicarConfirmacaoPedido(cliente, idPedido,
-                quantidadeTotal, valorTotal, agora);
+        quantidadeTotal, valorTotal, agora, itensResposta);
         ClienteResumoDto resumoAtualizado = clienteService.buscarResumo(idCliente);
         ClienteResumoDto resumo = new ClienteResumoDto(
                 resumoAtualizado.idCliente(), resumoAtualizado.nome(), resumoAtualizado.segmento(),

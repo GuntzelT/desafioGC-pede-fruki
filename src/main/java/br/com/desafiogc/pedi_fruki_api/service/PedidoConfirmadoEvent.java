@@ -1,7 +1,10 @@
 package br.com.desafiogc.pedi_fruki_api.service;
 
+import br.com.desafiogc.pedi_fruki_api.dto.ItemPedidoCriadoDto;
+
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
+import java.util.List;
 
 //Evento criado na mesma transação do pedido e tratado pelo listener de e-mail após o commit.
 public record PedidoConfirmadoEvent(
@@ -13,5 +16,6 @@ public record PedidoConfirmadoEvent(
         String mensagem,
         Integer quantidadeFardos,
         BigDecimal valorTotal,
-        OffsetDateTime dataPedido
+        OffsetDateTime dataPedido,
+        List<ItemPedidoCriadoDto> itens
 ) {}

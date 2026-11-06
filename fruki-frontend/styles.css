@@ -307,7 +307,6 @@ h3 { margin: 0 0 5px; font-size: 15px; letter-spacing: -.2px; }
 .seller-mix-title { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin: 2px 0 12px; }
 .seller-mix-title h3 { margin: 6px 0 4px; color: #21382c; font-size: 19px; }
 .seller-mix-title p { margin: 0; color: #859188; font-size: 9px; line-height: 1.5; }
-.seller-score-badge { padding: 6px 8px; border-radius: 8px; background: #e9f6ee; color: #19704c; font-size: 8px; font-weight: 900; white-space: nowrap; }
 .seller-app-mix-list { display: grid; gap: 8px; }
 .seller-mix-item { display: grid; grid-template-columns: 29px minmax(0,1fr) 72px; gap: 9px; align-items: start; padding: 11px 9px; border: 1px solid #e5ebe7; border-radius: 11px; background: #fff; }
 .seller-mix-rank { display: grid; place-items: center; width: 27px; height: 27px; border-radius: 8px; background: #e8f5ed; color: #176d4a; font-size: 10px; font-weight: 900; }

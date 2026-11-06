@@ -7,7 +7,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 
-import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -76,23 +75,15 @@ public class ResendEmailService {
             return;
         }
 
-        // Não enviar informações sensíveis nos logs nem incorporar HTML sem escape.
-        String nomeCliente = escaparHtml(evento.clienteNome());
-        String valor = evento.valorTotal().setScale(2, RoundingMode.HALF_UP).toPlainString();
-        String corpo = "<h2>Pedido confirmado - Pede Fruki</h2>"
-                + "<p><strong>Pedido:</strong> #" + evento.pedidoId() + "</p>"
-                + "<p><strong>Cliente:</strong> " + nomeCliente + "</p>"
-                + "<p><strong>Quantidade:</strong> " + evento.quantidadeFardos() + " fardos</p>"
-                + "<p><strong>Total:</strong> R$ " + valor + "</p>"
-                + "<p>Registro salvo no Supabase. Esta mensagem é um e-mail de demonstração.</p>";
-
+        // O conteúdo (HTML com escape + versão em texto) é montado em EmailPedidoTemplate.
         List<String> para = new ArrayList<>();
         para.add(destinatario.trim());
         Map<String, Object> corpoJson = new HashMap<>();
         corpoJson.put("from", remetente.trim());
         corpoJson.put("to", para);
-        corpoJson.put("subject", "Pede Fruki - pedido #" + evento.pedidoId() + " confirmado");
-        corpoJson.put("html", corpo);
+        corpoJson.put("subject", EmailPedidoTemplate.assunto(evento));
+        corpoJson.put("html", EmailPedidoTemplate.html(evento));
+        corpoJson.put("text", EmailPedidoTemplate.texto(evento));
 
         // Resend: POST /emails, token Bearer, payload JSON e idempotência do evento.
         ResponseEntity<String> resposta = http.post()
@@ -106,16 +97,5 @@ public class ResendEmailService {
         log.info("Resend aceitou solicitação de e-mail do pedido {} (HTTP {}).",
                 evento.pedidoId(), resposta.getStatusCode().value());
         // 2xx significa aceitação pela API; entrega final pode falhar depois.
-    }
-
-    private String escaparHtml(String texto) {
-        if (texto == null) {
-            return "Cliente não informado";
-        }
-        return texto.replace("&", "&amp;")
-                .replace("<", "&lt;")
-                .replace(">", "&gt;")
-                .replace("\"", "&quot;")
-                .replace("'", "&#39;");
     }
 }

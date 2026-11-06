@@ -36,6 +36,7 @@ try { identifiedCustomer = JSON.parse(sessionStorage.getItem("frukiIdentifiedCus
 if (sessionToken && identifiedCustomer) currentRecommendations = [];
 let toastTimeout;
 let sellerAppClients = [];
+let sellerCustomerDetails = {};
 let sellerAppCustomerId = currentCustomerId;
 let sellerAppRecommendations = [];
 let sellerAppScreen = "home";
@@ -133,6 +134,51 @@ function renderDashboardCustomers(rows) {
   }
   select.value = String(currentCustomerId);
   renderCustomer();
+}
+
+async function loadSellerCustomerDetails(customerId) {
+    const requestedCustomerId = String(customerId);
+
+    // Verifica se os detalhes já foram carregados.
+    if (sellerCustomerDetails[requestedCustomerId]) {
+        return sellerCustomerDetails[requestedCustomerId];
+    }
+
+    const url = `${apiBase.replace(/\/+$/, "")}/api/app-vendedor/clientes/${encodeURIComponent(requestedCustomerId)}`;
+
+    const response = await fetch(url, {
+        headers: {
+            "Accept": "application/json"
+        }
+    });
+
+    if (!response.ok) {
+        throw new Error(`Erro ao buscar cliente: HTTP ${response.status}`);
+    }
+
+    const customerDetails = await response.json();
+
+    // Guarda os detalhes recebidos.
+    sellerCustomerDetails[requestedCustomerId] = customerDetails;
+
+    // Atualiza o cliente na lista já carregada.
+    const clientIndex = sellerAppClients.findIndex(
+        client => String(client.idCliente ?? client.id) === requestedCustomerId
+    );
+
+    if (clientIndex !== -1) {
+        sellerAppClients[clientIndex] = {
+            ...sellerAppClients[clientIndex],
+            ...customerDetails
+        };
+    }
+
+    // Atualiza a tela somente se esse ainda for o cliente selecionado.
+    if (String(currentCustomerId) === requestedCustomerId) {
+        renderCustomer();
+    }
+
+    return customerDetails;
 }
 
 async function loadSellerDashboardRecommendations(customerId) {
@@ -439,8 +485,18 @@ async function loadSellerAppClients() {
     if (!rows.some(client => String(client.idCliente) === String(sellerAppCustomerId))) sellerAppCustomerId = String(rows[0].idCliente);
     select.value = String(sellerAppCustomerId);
     renderDashboardCustomers(rows);
-    renderSellerApp();
-    await loadSellerDashboardRecommendations(currentCustomerId);
+
+// Busca os detalhes do cliente selecionado,
+// incluindo cidade e UF.
+try {
+    await loadSellerCustomerDetails(currentCustomerId);
+} catch (error) {
+    console.error("Erro ao carregar detalhes do cliente:", error);
+}
+
+renderSellerApp();
+
+await loadSellerDashboardRecommendations(currentCustomerId);
     await loadSellerAppData();
   } catch (error) {
     sellerAppClients = Object.keys(demoCustomers).map(id => ({
@@ -701,15 +757,29 @@ document.querySelectorAll("[data-seller-action]").forEach(button => button.addEv
 }));
 
 document.querySelectorAll(".nav-item").forEach(button => button.addEventListener("click", () => setTab(button.dataset.tab)));
-$("customer-select").addEventListener("change", event => {
-  if (sessionToken && identifiedCustomer) {
-    event.target.value = String(identifiedCustomer.idCliente);
-    showToast("Esta conversa está vinculada ao cliente identificado. Reinicie a conversa para identificar outro cliente.");
-    return;
-  }
-  currentCustomerId = String(event.target.value);
-  renderCustomer();
-  loadSellerDashboardRecommendations(currentCustomerId);
+$("customer-select").addEventListener("change", async event => {
+    if (sessionToken && identifiedCustomer) {
+        event.target.value = String(identifiedCustomer.idCliente);
+
+        showToast("Esta conversa está vinculada ao cliente identificado. Reinicie a conversa para identificar outro cliente.");
+
+        return;
+    }
+
+    currentCustomerId = String(event.target.value);
+
+    // Atualiza os dados básicos imediatamente.
+    renderCustomer();
+
+    // Busca cidade, UF e demais detalhes.
+    try {
+        await loadSellerCustomerDetails(currentCustomerId);
+    } catch (error) {
+        console.error("Erro ao carregar cidade do cliente:", error);
+    }
+
+    // Atualiza as recomendações.
+    await loadSellerDashboardRecommendations(currentCustomerId);
 });
 $("refresh-recommendations").addEventListener("click", refreshRecommendations);
 $("configure-api").addEventListener("click", () => $("api-settings").classList.toggle("hidden"));

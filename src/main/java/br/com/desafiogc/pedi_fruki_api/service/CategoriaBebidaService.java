@@ -1,6 +1,6 @@
 package br.com.desafiogc.pedi_fruki_api.service;
 
-/** Categorias usadas pelas regras de clima e sazonalidade. */
+/** Categorias usadas pelas regras de clima, feriados e sazonalidade. */
 public enum CategoriaBebidaService {
     ALCOOLICA("bebidas alcoólicas"),
     REFRIGERANTE("refrigerantes"),
