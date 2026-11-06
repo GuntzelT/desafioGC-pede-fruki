@@ -101,7 +101,7 @@ public class RecomendacaoService {
             if (motivoClima != null) {
                 motivos.add(motivoClima);
             }
-            String motivoCalendario = contextoService.motivoCalendario(pontosCalendario, contexto);
+            String motivoCalendario = contextoService.motivoCalendario(produto, pontosCalendario, contexto);
             if (motivoCalendario != null) {
                 motivos.add(motivoCalendario);
             }
