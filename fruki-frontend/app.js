@@ -80,7 +80,91 @@ function selectedCustomer() {
       city: [identifiedCustomer.cidade, identifiedCustomer.uf].filter(Boolean).join(", ") || "Cidade não informada"
     };
   }
+  const sellerCustomer = sellerAppClients.find(client => String(client.idCliente ?? client.id) === String(currentCustomerId));
+  if (sellerCustomer) {
+    const profileParts = [sellerCustomer.segmento ?? sellerCustomer.profile, sellerCustomer.subsegmento].filter(Boolean);
+    return {
+      id: sellerCustomer.idCliente ?? sellerCustomer.id,
+      name: sellerCustomer.nome ?? sellerCustomer.name ?? "Cliente selecionado",
+      profile: profileParts.join(" · ") || "Perfil não informado",
+      city: [sellerCustomer.cidade, sellerCustomer.uf].filter(Boolean).join(", ") || "Cidade não informada"
+    };
+  }
   return demoCustomers[currentCustomerId] || demoCustomers["1001"];
+}
+
+function setConnectionStatus(connected, message) {
+  apiConnected = connected;
+  const banner = $("connection-banner");
+  const statusText = banner?.querySelector("span:last-of-type");
+  const pill = document.querySelector(".topbar-right .demo-pill");
+  const sidebarTitle = document.querySelector(".sidebar-bottom strong");
+  const sidebarDetail = document.querySelector(".sidebar-bottom small");
+
+  if (connected) {
+    banner?.classList.add("hidden");
+    if (pill) pill.innerHTML = "<span></span> API conectada";
+    if (sidebarTitle) sidebarTitle.textContent = "API conectada";
+    if (sidebarDetail) sidebarDetail.textContent = "Dados reais do Supabase";
+    return;
+  }
+
+  banner?.classList.remove("hidden");
+  if (statusText) statusText.innerHTML = message;
+  if (pill) pill.innerHTML = "<span></span> Modo demonstração";
+  if (sidebarTitle) sidebarTitle.textContent = "Modo demonstração";
+  if (sidebarDetail) sidebarDetail.textContent = "Confira a conexão com a API";
+}
+
+function renderDashboardCustomers(rows) {
+  const select = $("customer-select");
+  if (!select || !Array.isArray(rows) || rows.length === 0) return;
+
+  select.innerHTML = rows.map(client => {
+    const id = client.idCliente ?? client.id;
+    const name = client.nome ?? client.name ?? `Cliente ${id}`;
+    return `<option value="${escapeHtml(id)}">${escapeHtml(name)} · #${escapeHtml(id)}</option>`;
+  }).join("");
+
+  if (identifiedCustomer && rows.some(client => String(client.idCliente ?? client.id) === String(identifiedCustomer.idCliente))) {
+    currentCustomerId = String(identifiedCustomer.idCliente);
+  } else if (!rows.some(client => String(client.idCliente ?? client.id) === String(currentCustomerId))) {
+    currentCustomerId = String(rows[0].idCliente ?? rows[0].id);
+  }
+  select.value = String(currentCustomerId);
+  renderCustomer();
+}
+
+async function loadSellerDashboardRecommendations(customerId) {
+  const requestedCustomerId = String(customerId);
+  const url = `${apiBase.replace(/\/+$/, "")}/api/app-vendedor/clientes/${encodeURIComponent(requestedCustomerId)}/recomendacoes`;
+  $("api-status").textContent = `Consultando ${url} ...`;
+
+  try {
+    const response = await fetch(url, { headers: { "Accept": "application/json" } });
+    if (!response.ok) throw new Error(`API respondeu HTTP ${response.status}`);
+    const payload = await response.json();
+    if (!Array.isArray(payload)) throw new Error("Formato de recomendações inesperado.");
+    if (String(currentCustomerId) !== requestedCustomerId) return;
+
+    currentRecommendations = mapApiRecommendations(payload);
+    refreshCatalogProductsForCurrentRecommendations();
+    setConnectionStatus(true);
+    $("api-status").textContent = `Conectado com sucesso. ${payload.length} recomendação(ões) recebida(s).`;
+    renderRecommendations();
+  } catch (error) {
+    if (String(currentCustomerId) !== requestedCustomerId) return;
+    const demoRows = demoRecommendations[requestedCustomerId];
+    currentRecommendations = demoRows || [];
+    renderRecommendations();
+
+    if (demoRows) {
+      setConnectionStatus(false, `<strong>Modo demonstração ativo.</strong> Não foi possível acessar a API; exibindo dados fictícios.`);
+    } else {
+      setConnectionStatus(false, `<strong>API indisponível.</strong> ${escapeHtml(error.message)}. As recomendações reais não puderam ser carregadas.`);
+    }
+    $("api-status").textContent = `Não foi possível conectar: ${error.message}. Confira backend, CORS e Supabase.`;
+  }
 }
 
 function renderRecommendations() {
@@ -88,13 +172,16 @@ function renderRecommendations() {
   $("recommendation-list").innerHTML = recommendations.map((item, index) => `
     <article class="recommendation-card">
       <div class="rank">${String(index + 1).padStart(2, "0")}</div>
-      <div>
-        <div class="product-title-row">
-          <span class="product-title">${escapeHtml(item.name)}</span>
-          <span class="category-tag">${escapeHtml(item.category || "Produto")}</span>
+      <div class="recommendation-main">
+        ${productVisualMarkup(item, "recommendation-photo")}
+        <div>
+          <div class="product-title-row">
+            <span class="product-title">${escapeHtml(item.name)}</span>
+            <span class="category-tag">${escapeHtml(item.category || "Produto")}</span>
+          </div>
+          <p class="product-reason">${escapeHtml(item.reason || "Recomendação calculada pelo motor de recomendação.")}</p>
+          <div class="product-sub">Fator em destaque: ${escapeHtml(item.factor || "Score combinado")} · ${escapeHtml(item.price || "Consulte a tabela de preços")}</div>
         </div>
-        <p class="product-reason">${escapeHtml(item.reason || "Recomendação calculada pelo motor de recomendação.")}</p>
-        <div class="product-sub">Fator em destaque: ${escapeHtml(item.factor || "Score combinado")} · ${escapeHtml(item.price || "Consulte a tabela de preços")}</div>
       </div>
       <div class="score-wrap">
         <div class="score">${Math.round(Number(item.score ?? item.pontuacao ?? 0))}<small>/100</small></div>
@@ -102,6 +189,7 @@ function renderRecommendations() {
       </div>
     </article>
   `).join("") || `<div class="panel" style="padding:22px;color:#718078">Nenhuma recomendação retornada para este cliente.</div>`;
+  bindProductImages($("recommendation-list"));
 
   $("metric-products").textContent = recommendations.length;
   const newCount = Math.max(0, recommendations.filter(item => /diversifica|portfólio|complement/i.test((item.factor || "") + " " + (item.reason || ""))).length);
@@ -136,26 +224,156 @@ function emojiFor(name = "") {
   return "🥤";
 }
 
+function normalizeCatalogText(value) {
+  return String(value ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase().replace(/[^a-z0-9]+/g, " ").trim().replace(/\s+/g, " ");
+}
+
+function catalogPresentationKey(product) {
+  const basePrice = Number.isFinite(Number(product.precoBase)) ? Number(product.precoBase).toFixed(2) : "";
+  const minimumPrice = Number.isFinite(Number(product.precoMinimo)) ? Number(product.precoMinimo).toFixed(2) : "";
+  return [normalizeCatalogText(product.name), normalizeCatalogText(product.category), basePrice, minimumPrice].join("|");
+}
+
+function uniqueCatalogProducts(products) {
+  const recommendedIds = new Set((currentRecommendations || []).map(item => String(item.id ?? item.produtoId ?? "")));
+  const groups = new Map();
+  products.forEach(product => {
+    const key = catalogPresentationKey(product);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(product);
+  });
+
+  return Array.from(groups.values(), group => group.slice().sort((first, second) => {
+    const firstRecommended = recommendedIds.has(String(first.id)) ? 0 : 1;
+    const secondRecommended = recommendedIds.has(String(second.id)) ? 0 : 1;
+    if (firstRecommended !== secondRecommended) return firstRecommended - secondRecommended;
+    return Number(first.id) - Number(second.id);
+  })[0]);
+}
+
+function refreshCatalogProductsForCurrentRecommendations() {
+  if (catalogIsFromApi && catalogProductRows.length) {
+    catalogProducts = uniqueCatalogProducts(catalogProductRows);
+  }
+}
+
+function productVisualMarkup(item, className = "product-visual") {
+  const imageUrl = item.imageUrl ?? item.imagemUrl ?? item.fotoUrl ?? item.urlImagem;
+  const safeImageUrl = typeof imageUrl === "string" && /^(https?:\/\/|\/)/i.test(imageUrl.trim())
+    ? imageUrl.trim()
+    : "";
+  const productName = item.name || item.nomeProduto || "";
+  const normalizedName = normalizeCatalogText(productName);
+  const tone = normalizedName.includes("agua") ? "tone-water"
+    : normalizedName.includes("elev") || normalizedName.includes("energy") ? "tone-energy"
+    : normalizedName.includes("frukito") || normalizedName.includes("suco") || normalizedName.includes("com-tem") ? "tone-juice"
+    : normalizedName.includes("citrus") || normalizedName.includes("laranja") || normalizedName.includes("limao") ? "tone-citrus"
+    : "tone-fruki";
+  const emoji = emojiFor(productName);
+  const visual = safeImageUrl
+    ? `<img data-product-image src="${escapeHtml(safeImageUrl)}" alt="${escapeHtml(productName || "Produto Fruki")}" loading="lazy"><span class="product-visual-fallback" hidden>${emoji}</span>`
+    : `<span>${emoji}</span>`;
+  return `<div class="${className} ${tone}${safeImageUrl ? " has-image" : ""}">${visual}</div>`;
+}
+
+function bindProductImages(container) {
+  if (!container) return;
+  container.querySelectorAll("[data-product-image]").forEach(image => {
+    const showFallback = () => {
+      image.hidden = true;
+      if (image.nextElementSibling) image.nextElementSibling.hidden = false;
+    };
+    image.addEventListener("error", showFallback, { once: true });
+    if (image.complete && !image.naturalWidth) showFallback();
+  });
+}
+
+function recommendationBundleAmounts(count) {
+  if (count >= 3) return [50, 30, 20];
+  if (count === 2) return [60, 40];
+  if (count === 1) return [100];
+  return [];
+}
+
 function renderChatProducts() {
   const recommendations = (currentRecommendations || []).slice(0, 3);
-  const amounts = recommendations.length >= 3 ? [100, 60, 40] : recommendations.length === 2 ? [120, 80] : [200];
+  const amounts = recommendationBundleAmounts(recommendations.length);
   const products = recommendations.map((item, index) => ({
     name: item.name || item.nomeProduto || "Produto recomendado",
     note: item.reason || item.motivo || "Recomendado para este perfil",
     amount: amounts[index] || 0,
     tag: item.factor || item.fatorPrincipal || "Recomendação",
-    emoji: emojiFor(item.name || item.nomeProduto)
+    emoji: emojiFor(item.name || item.nomeProduto),
+    imageUrl: item.imageUrl ?? item.imagemUrl ?? item.fotoUrl ?? item.urlImagem ?? portfolioImageForProduct(item.name || item.nomeProduto)
   }));
   const target = $("weekly-products");
   if (target) target.innerHTML = products.map(item => `
-    <div class="weekly-product"><div class="product-visual">${item.emoji}</div><div><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(item.note)} · ${item.amount} fardos</small></div><span class="product-reason-tag">${escapeHtml(item.tag)}</span></div>
+    <div class="weekly-product">${productVisualMarkup(item)}<div><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(item.note)} · ${item.amount} fardos</small></div><span class="product-reason-tag">${escapeHtml(item.tag)}</span></div>
   `).join("") || `<p>Identifique o cliente e conecte o backend para ver sugestões reais.</p>`;
+  bindProductImages(target);
   const hiddenTarget = $("chat-products");
   if (hiddenTarget) hiddenTarget.innerHTML = "";
 }
 
+function portfolioImageForProduct(name = "") {
+  const normalized = normalizeCatalogText(name);
+  const hasVolume = volume => normalized.includes(volume);
+  const has500Ml = hasVolume("500ml") || hasVolume("500 ml");
+  const has350Ml = hasVolume("350ml") || hasVolume("350 ml");
+  const has2L = hasVolume("2l");
+
+  if (normalized.includes("agua da pedra") && normalized.includes("sem gas")) {
+    if (hasVolume("20l")) return "https://fruki.com.br/static/40d0e73872ac3aa328f5a79467a183d5/f537b/fruki_pet_2l_regular_frontal.webp";
+    if (hasVolume("1 5l") || hasVolume("1 5 l")) return "https://fruki.com.br/static/ff27adbda81184149dcc16ddebe7194c/a785b/fruki_pet_1-5l_regular_frontal.webp";
+    if (hasVolume("5l")) return "https://fruki.com.br/static/b101b555aaf30dfaa73fdce19069e0ed/a785b/fruki-5l-agua-s-gas-gotas.webp";
+    if (has500Ml) return "https://fruki.com.br/static/c4b5fd7ee7d5f90d32e4b858153506c5/f537b/fruki-500ml-agua-s-gas-gotas.webp";
+  }
+  if (normalized.includes("agua da pedra") && normalized.includes("com gas")) {
+    if (has500Ml) return "https://fruki.com.br/static/27bf5daa2a9731ece513fc07904bd200/f537b/fruki-500ml-agua-c-gas-gotas.webp";
+    if (has350Ml) return "https://fruki.com.br/static/6d1641ce86d4fc4011b17d4ac58329d9/f537b/fruki-350ml-agua-c-gas-gotas.webp";
+  }
+  if (normalized.includes("elev")) {
+    if (normalized.includes("zero") && has2L) return "https://fruki.com.br/static/60c87b70f0e41d1172fd7def3add6cea/a785b/elev_zero-a%C3%A7%C3%BAcar.webp";
+    if (normalized.includes("original") && has2L) return "https://fruki.com.br/static/8ca2e728d0bf453a09375e820bf0397a/a785b/elev_sabor-original.webp";
+    if (normalized.includes("maca verde") && hasVolume("473")) return "https://fruki.com.br/static/8b96568d93d1ff375803067d708a3db3/c361c/eleve_473_maca_verde.webp";
+    if (normalized.includes("maca verde") && has2L) return "https://fruki.com.br/static/ff129726e8a72dede934727b19e479d6/a785b/pet_maca_verde_frontal.webp";
+    if (normalized.includes("original") && hasVolume("473")) return "https://fruki.com.br/static/b92955462f4378923141512db531854c/c361c/eleve_473_original.webp";
+    if (normalized.includes("zero") && hasVolume("473")) return "https://fruki.com.br/static/0a6968df7ec5b1403c5c7c5f28e5f638/c361c/eleve_473_zero_ac%CC%A7ucar.webp";
+    if (normalized.includes("frutas tropicais") && has2L) return "https://fruki.com.br/static/0f8443b72a3dcf40313a8fad72786f58/a785b/elev_frutas-tropicais.webp";
+    if (normalized.includes("morango e melancia") && has2L) return "https://fruki.com.br/static/3cfc7e4bbedb1b51d46354413bbaf727/a785b/elev_pet_morango_melancia.webp";
+    if (normalized.includes("guarana e maracuja") && has2L) return "https://fruki.com.br/static/afe8ce7b1d000cbae8698035d18fb842/a785b/pet_guarana_frontal.webp";
+    if (normalized.includes("coco") && normalized.includes("acai") && has2L) return "https://fruki.com.br/static/68ef8d584fc9dd7cbca42694c5cf8816/a785b/fruki_elev_coco_acai_2l.webp";
+  }
+  if (normalized.includes("bella vista") && normalized.includes("ipa") && normalized.includes("lata")) return "https://fruki.com.br/static/bc608b6936580e38a552d0f64356bb93/f537b/bellavista-ipa-350.webp";
+  if (normalized.includes("bella vista") && normalized.includes("premium lager") && normalized.includes("long neck")) return "https://fruki.com.br/static/fc06d0a0e6de5c2ab0580019534063a2/a785b/frontais_suadas_long_neck_f01.webp";
+  if (normalized.includes("fruki citrus") && has350Ml) return "https://fruki.com.br/static/d5be827bf87fe6d2d57b53565979eea5/ce8be/citrus_350ml.png2.webp";
+  if (normalized.includes("fruki cola")) {
+    if (has2L) return "https://fruki.com.br/static/724e5a7fadc809365cee654146d2ad9e/f537b/cola-2l.webp";
+    if (has350Ml) return "https://fruki.com.br/static/f5db864f1dd77fb888b5db1d7483ccc7/f537b/cola_lata350_wet.webp";
+    if (hasVolume("600ml") || hasVolume("600 ml")) return "https://fruki.com.br/static/ee97a2a0a23c9e25112c22236edffe60/f537b/cola-600.webp";
+  }
+  if (normalized.includes("fruki uva") && has2L) return "https://fruki.com.br/static/e9c99adf5d0a26fbecbd33c61ad54148/beecb/mockup-2l-uva-final.webp";
+  if (normalized.includes("fruki guarana") && (hasVolume("600ml") || hasVolume("600 ml")) && !normalized.includes("zero")) return "https://fruki.com.br/static/fe3966b9b9fe49a66a68e89045b7b94c/f537b/fruki_pet_600ml__frontal.webp";
+  if (normalized.includes("laranjinha") && has2L) return "https://fruki.com.br/static/10b10561f32ed9e6cd68ddae8959d7a5/f537b/laranjinha-2l-sem-_novo.webp";
+  if (normalized.includes("frukito") && normalized.includes("citricas") && has500Ml) return "https://fruki.com.br/static/d179ee653572fdca4adc376d73f74336/a785b/alta_frukito_frutas_citricas_500ml_gotas.webp";
+  if (normalized.includes("suco com tem") && normalized.includes("laranja") && hasVolume("1l") && !normalized.includes("vidro")) return "https://fruki.com.br/static/f165e5daf0fa2e8b9dd0b100600b98c3/a785b/_suco_tetrapack_1l_frente_laranja.webp";
+  if (normalized.includes("suco com tem") && normalized.includes("uva") && hasVolume("1l") && !normalized.includes("vidro")) return "https://fruki.com.br/static/51ec67c153be6c18fafb67e403c1c9e1/a785b/_suco_tetrapack_1l_frente_uva.webp";
+  return null;
+}
+
+function dedupeRecommendationsByProduct(recommendations) {
+  const seenProducts = new Set();
+  return recommendations.filter(item => {
+    const productKey = normalizeCatalogText(item.name || item.nomeProduto || "") || `id:${item.id ?? item.produtoId ?? ""}`;
+    if (seenProducts.has(productKey)) return false;
+    seenProducts.add(productKey);
+    return true;
+  });
+}
+
 function mapApiRecommendations(rows) {
-  return rows.map(item => ({
+  const mapped = rows.map(item => ({
     id: item.produtoId ?? item.id ?? item.idProduto,
     name: item.nomeProduto ?? item.nome ?? item.name ?? "Produto sem nome",
     category: item.categoria ?? item.categoriaProduto ?? "Produto",
@@ -163,8 +381,10 @@ function mapApiRecommendations(rows) {
     reason: item.motivo ?? item.justificativa ?? item.reason ?? "Recomendação retornada pela API.",
     factor: item.fatorPrincipal ?? item.fator ?? "Score combinado",
     price: item.preco != null ? Number(item.preco).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : "Preço conforme cadastro",
+    imageUrl: item.imageUrl ?? item.imagemUrl ?? item.fotoUrl ?? item.urlImagem ?? portfolioImageForProduct(item.nomeProduto ?? item.nome ?? item.name),
     rawPrice: item.preco
   }));
+  return dedupeRecommendationsByProduct(mapped);
 }
 
 function sellerAppCustomer() {
@@ -194,9 +414,10 @@ function renderSellerApp() {
     list.innerHTML = rows.map((item, index) => `
       <article class="seller-mix-item">
         <span class="seller-mix-rank">${String(index + 1).padStart(2, "0")}</span>
-        <div class="seller-mix-product"><strong>${escapeHtml(item.name || item.nomeProduto || "Produto")}</strong><small>${escapeHtml(item.category || item.categoria || "Produto")} · ${escapeHtml(item.factor || item.fatorPrincipal || "Score combinado")}</small><p>${escapeHtml(item.reason || item.motivo || "Recomendado para este perfil.")}</p></div>
+        <div class="seller-mix-product">${productVisualMarkup(item, "seller-mix-photo")}<div class="seller-mix-copy"><strong>${escapeHtml(item.name || item.nomeProduto || "Produto")}</strong><small>${escapeHtml(item.category || item.categoria || "Produto")} · ${escapeHtml(item.factor || item.fatorPrincipal || "Score combinado")}</small><p>${escapeHtml(item.reason || item.motivo || "Recomendado para este perfil.")}</p></div></div>
         <div class="seller-mix-score"><strong>${Math.round(Number(item.score ?? 0))}</strong><small>/100</small><span>${escapeHtml(item.price || "Preço conforme cadastro")}</span></div>
       </article>`).join("") || `<p class="seller-app-empty">Não há recomendações disponíveis. Confira se a API e o banco estão conectados.</p>`;
+    bindProductImages(list);
     $("seller-app-mix-subtitle").textContent = `${rows.length} produto(s) priorizado(s) para ${customer.name}.`;
   }
   const profileScreen = $("seller-app-home");
@@ -217,7 +438,9 @@ async function loadSellerAppClients() {
     select.innerHTML = rows.map(client => `<option value="${escapeHtml(client.idCliente)}">${escapeHtml(client.nome)} · #${escapeHtml(client.idCliente)}</option>`).join("");
     if (!rows.some(client => String(client.idCliente) === String(sellerAppCustomerId))) sellerAppCustomerId = String(rows[0].idCliente);
     select.value = String(sellerAppCustomerId);
+    renderDashboardCustomers(rows);
     renderSellerApp();
+    await loadSellerDashboardRecommendations(currentCustomerId);
     await loadSellerAppData();
   } catch (error) {
     sellerAppClients = Object.keys(demoCustomers).map(id => ({
@@ -227,6 +450,10 @@ async function loadSellerAppClients() {
     if (!sellerAppClients.some(client => String(client.idCliente) === String(sellerAppCustomerId))) sellerAppCustomerId = "1001";
     select.value = String(sellerAppCustomerId);
     sellerAppRecommendations = demoRecommendations[sellerAppCustomerId] || demoRecommendations["1001"];
+    renderDashboardCustomers(sellerAppClients);
+    currentRecommendations = demoRecommendations[currentCustomerId] || demoRecommendations["1001"];
+    renderRecommendations();
+    setConnectionStatus(false, `<strong>Modo demonstração ativo.</strong> Não foi possível acessar a API; exibindo dados fictícios.`);
     renderSellerApp();
   }
 }
@@ -301,6 +528,7 @@ async function loadFromApi(customerId) {
     const rows = Array.isArray(payload) ? payload : (payload.recomendacoes || payload.produtos || payload.items || []);
     if (!Array.isArray(rows)) throw new Error("Formato JSON não reconhecido. Esperava uma lista de recomendações.");
     currentRecommendations = mapApiRecommendations(rows);
+    refreshCatalogProductsForCurrentRecommendations();
     apiConnected = true;
     $("connection-banner").classList.add("hidden");
     $("api-status").textContent = `Conectado com sucesso. ${rows.length} recomendação(ões) recebida(s).`;
@@ -344,29 +572,33 @@ async function loadCatalogFromApi() {
       throw new Error("A API não retornou uma lista de produtos.");
     }
 
-    catalogProducts = rows.map(item => ({
+    catalogProductRows = rows.map(item => ({
       id: String(item.idItem ?? item.produtoId ?? item.id),
       name: item.nome ?? item.name ?? item.nomeProduto ?? "Produto sem nome",
       brand: item.codFamilia ? `Família ${item.codFamilia}` : "Catálogo Fruki",
       category: item.codFamilia ? String(item.codFamilia) : "Produtos",
       emoji: emojiFor(item.nome ?? item.name),
+      imageUrl: item.imageUrl ?? item.imagemUrl ?? item.fotoUrl ?? item.urlImagem ?? portfolioImageForProduct(item.nome ?? item.name ?? item.nomeProduto),
       precoBase: item.precoBase,
       precoMinimo: item.precoMinimo
     }));
 
     catalogIsFromApi = rows.length > 0;
+    catalogProducts = uniqueCatalogProducts(catalogProductRows);
 
     if (!catalogIsFromApi) {
       throw new Error("O catálogo retornou vazio.");
     }
 
     $("chat-feedback").textContent =
-      `Catálogo conectado: ${rows.length} produtos ativos do Supabase.`;
+      `Catálogo conectado: ${catalogProducts.length} apresentações únicas em ${rows.length} registros do Supabase.`;
 
     return true;
 
   } catch (error) {
     catalogIsFromApi = false;
+    catalogProductRows = demoCatalogProducts.slice();
+    catalogProducts = demoCatalogProducts.slice();
 
     $("chat-feedback").textContent =
       `Não foi possível carregar o catálogo real: ${error.message}`;
@@ -408,6 +640,7 @@ function resetSimulation() {
   Object.keys(cart).forEach(key => delete cart[key]);
   updateCartCount();
   catalogIsFromApi = false;
+  catalogProductRows = demoCatalogProducts.slice();
   catalogProducts = demoCatalogProducts.slice();
   currentCustomerId = "1001";
   currentRecommendations = demoRecommendations[currentCustomerId];
@@ -417,12 +650,10 @@ function resetSimulation() {
 }
 
 function refreshRecommendations() {
-  if ((sessionToken && identifiedCustomer) || apiConnected || $("api-url").value.trim() !== "http://localhost:8080") {
+  loadSellerDashboardRecommendations(currentCustomerId);
+  if (sessionToken && identifiedCustomer) {
     loadFromApi(currentCustomerId);
-    if (sessionToken && identifiedCustomer) loadCatalogFromApi();
-  } else {
-    setDemoData(currentCustomerId);
-    showToast("Recomendações de demonstração atualizadas.");
+    loadCatalogFromApi();
   }
 }
 
@@ -476,8 +707,9 @@ $("customer-select").addEventListener("change", event => {
     showToast("Esta conversa está vinculada ao cliente identificado. Reinicie a conversa para identificar outro cliente.");
     return;
   }
-  setDemoData(event.target.value);
-  if (apiConnected) loadFromApi(event.target.value);
+  currentCustomerId = String(event.target.value);
+  renderCustomer();
+  loadSellerDashboardRecommendations(currentCustomerId);
 });
 $("refresh-recommendations").addEventListener("click", refreshRecommendations);
 $("configure-api").addEventListener("click", () => $("api-settings").classList.toggle("hidden"));
@@ -489,7 +721,7 @@ $("save-api").addEventListener("click", () => {
   }
   apiBase = value.replace(/\/+$/, "");
   localStorage.setItem("frukiApiBase", apiBase);
-  loadFromApi(currentCustomerId);
+  loadSellerAppClients();
   if (sessionToken && identifiedCustomer) loadCatalogFromApi();
 });
 const demoCatalogProducts = [
@@ -503,7 +735,9 @@ const demoCatalogProducts = [
   { id: "frukito", name: "Frukito Frutas Cítricas 500ml", brand: "Frukito · PET 500ml · fardo c/ 12 un.", category: "Sucos", emoji: "🍋" }
 ];
 let catalogProducts = demoCatalogProducts.slice();
+let catalogProductRows = [];
 const cart = {};
+const MINIMUM_ORDER_QUANTITY = 100;
 let activeCatalogCategory = "Todos";
 let catalogSearchTerm = "";
 const homeScreenHTML = $("chat-screen-body").innerHTML;
@@ -524,15 +758,56 @@ function renderCatalogScreen() {
     $("chat-screen-body").innerHTML = `<div class="catalog-screen"><h3 class="mobile-screen-title">Catálogo</h3><p class="mobile-screen-subtitle">Para salvar um pedido precisamos dos IDs reais dos produtos do Supabase.</p><button id="catalog-retry" class="primary-mobile-btn">Tentar carregar catálogo</button><button id="home-back" class="chat-cta">Voltar à conversa</button></div>`;
     return;
   }
-  const categories = ["Todos", ...new Set(catalogProducts.map(p => p.category).filter(Boolean))].slice(0, 7);
-  const filtered = catalogProducts.filter(p => (activeCatalogCategory === "Todos" || p.category === activeCatalogCategory) && `${p.name} ${p.brand}`.toLowerCase().includes(catalogSearchTerm.toLowerCase()));
-  $("chat-screen-body").innerHTML = `<div class="catalog-screen"><h3 class="mobile-screen-title">Catálogo do Supabase</h3><p class="mobile-screen-subtitle">${catalogProducts.length} produtos ativos · pedido mínimo de 200 fardos</p><input id="catalog-search" class="catalog-search" placeholder="Buscar produto" value="${escapeHtml(catalogSearchTerm)}"><div class="category-chips">${categories.map(c=>`<button class="category-chip ${activeCatalogCategory===c?'active':''}" data-category="${escapeHtml(c)}">${escapeHtml(c)}</button>`).join("")}</div>${filtered.map(p=>`<div class="catalog-item"><div class="product-visual">${p.emoji}</div><div><strong>${escapeHtml(p.name)}</strong><small>${escapeHtml(p.brand)}<br>Preço calculado pelo backend conforme segmento</small></div><div class="quantity-control">${cart[p.id] ? `<button data-qty="-" data-product="${p.id}" aria-label="Diminuir quantidade">−</button><span>${cart[p.id]}</span><button data-qty="+" data-product="${p.id}" aria-label="Aumentar quantidade">+</button>` : `<button data-qty="+" data-product="${p.id}" aria-label="Adicionar quantidade">+10</button>`}</div></div>`).join("") || `<p>Nenhum produto encontrado.</p>`}<div class="catalog-bottom"><button id="catalog-cart-button" class="primary-mobile-btn">Ver carrinho · ${cartTotal()}/200 fardos</button></div></div>`;
+  const categories = ["Todos", ...new Set(catalogProducts.map(product => product.category).filter(Boolean))].slice(0, 7);
+  const filtered = catalogProducts.filter(product =>
+    (activeCatalogCategory === "Todos" || product.category === activeCatalogCategory) &&
+    `${product.name} ${product.brand}`.toLowerCase().includes(catalogSearchTerm.toLowerCase())
+  );
+  const categoryButtons = categories.map(category => `
+    <button class="category-chip ${activeCatalogCategory === category ? "active" : ""}" data-category="${escapeHtml(category)}">${escapeHtml(category)}</button>
+  `).join("");
+  const productRows = filtered.map(product => `
+    <article class="catalog-item">
+      ${productVisualMarkup(product)}
+      <div><strong>${escapeHtml(product.name)}</strong><small>${escapeHtml(product.brand)}<br>Preço calculado pelo backend conforme segmento</small></div>
+      <div class="quantity-control">${cart[product.id]
+        ? `<button data-qty="-" data-product="${escapeHtml(product.id)}" aria-label="Diminuir quantidade">−</button><span>${cart[product.id]}</span><button data-qty="+" data-product="${escapeHtml(product.id)}" aria-label="Aumentar quantidade">+</button>`
+        : `<button data-qty="+" data-product="${escapeHtml(product.id)}" aria-label="Adicionar quantidade">+10</button>`}</div>
+    </article>
+  `).join("");
+  $("chat-screen-body").innerHTML = `<div class="catalog-screen">
+    <h3 class="mobile-screen-title">Catálogo do Supabase</h3>
+    <p class="mobile-screen-subtitle">${catalogProducts.length} produtos ativos · pedido mínimo de ${MINIMUM_ORDER_QUANTITY} fardos</p>
+    <input id="catalog-search" class="catalog-search" placeholder="Buscar produto" value="${escapeHtml(catalogSearchTerm)}">
+    <div class="category-chips">${categoryButtons}</div>
+    ${productRows || `<p>Nenhum produto encontrado.</p>`}
+    <div class="catalog-bottom"><button id="catalog-cart-button" class="primary-mobile-btn">Ver carrinho · ${cartTotal()}/${MINIMUM_ORDER_QUANTITY} fardos</button></div>
+  </div>`;
+  bindProductImages($("chat-screen-body"));
 }
 function renderCartScreen() {
   if (!sessionToken) { renderIdentificationScreen(); return; }
   const items = catalogProducts.filter(p => cart[p.id]);
-  const checkoutDisabled = cartTotal() < 200 || !catalogIsFromApi;
-  $("chat-screen-body").innerHTML = `<div class="cart-screen"><h3 class="mobile-screen-title">Seu carrinho</h3><p class="mobile-screen-subtitle">Confira as quantidades antes de enviar o pedido.</p><div class="cart-total"><strong>${cartTotal()} fardos no carrinho</strong><br><span>${cartTotal() >= 200 ? "Pedido mínimo atingido ✓" : `Faltam ${200-cartTotal()} fardos para atingir o pedido mínimo de 200.`}</span></div>${items.length ? items.map(p=>`<div class="cart-line"><div><strong>${escapeHtml(p.name)}</strong><small>${escapeHtml(p.brand)}</small></div><strong>${cart[p.id]} fardos</strong></div>`).join("") : `<p>Seu carrinho está vazio. Explore o catálogo ou adicione as sugestões inteligentes.</p>`}<div style="margin-top:18px"><button id="cart-add-suggestions" class="chat-cta">Adicionar sugestões inteligentes</button><button id="checkout-button" class="primary-mobile-btn" ${checkoutDisabled?'disabled':''}>Finalizar e salvar pedido · ${cartTotal()} fardos</button><button id="catalog-back" class="chat-cta" style="margin-top:8px">Voltar ao catálogo</button>${!catalogIsFromApi ? `<p class="mobile-screen-subtitle">O catálogo real do Supabase precisa estar carregado para salvar o pedido.</p>` : ""}</div></div>`;
+  const checkoutDisabled = cartTotal() < MINIMUM_ORDER_QUANTITY || !catalogIsFromApi;
+  $("chat-screen-body").innerHTML = `<div class="cart-screen">
+    <h3 class="mobile-screen-title">Seu carrinho</h3>
+    <p class="mobile-screen-subtitle">Confira os itens e as quantidades antes de enviar o pedido.</p>
+    <div class="cart-total"><strong>${cartTotal()} fardos no carrinho</strong><br><span>${cartTotal() >= MINIMUM_ORDER_QUANTITY ? "Pedido mínimo atingido ✓" : `Faltam ${MINIMUM_ORDER_QUANTITY - cartTotal()} fardos para atingir o pedido mínimo de ${MINIMUM_ORDER_QUANTITY}.`}</span></div>
+    ${items.length ? items.map(product => `<div class="cart-line">
+      <div><strong>${escapeHtml(product.name)}</strong><small>${escapeHtml(product.brand)}</small></div>
+      <div class="cart-quantity-control">
+        <button data-qty="-" data-product="${escapeHtml(product.id)}" aria-label="Diminuir ${escapeHtml(product.name)}">−</button>
+        <strong>${cart[product.id]}</strong>
+        <button data-qty="+" data-product="${escapeHtml(product.id)}" aria-label="Aumentar ${escapeHtml(product.name)}">+</button>
+      </div>
+    </div>`).join("") : `<p>Seu carrinho está vazio. Explore o catálogo ou adicione as sugestões inteligentes.</p>`}
+    <div class="cart-actions">
+      <button id="cart-add-suggestions" class="chat-cta">Adicionar sugestões inteligentes</button>
+      <button id="checkout-button" class="primary-mobile-btn" ${checkoutDisabled ? "disabled" : ""}>Finalizar e salvar pedido · ${cartTotal()} fardos</button>
+      <button id="catalog-back" class="chat-cta">Voltar ao catálogo</button>
+      ${!catalogIsFromApi ? `<p class="mobile-screen-subtitle">Carregue o catálogo real do Supabase para salvar o pedido.</p>` : ""}
+    </div>
+  </div>`;
 }
 async function renderRemindersScreen() {
   if (!sessionToken || !identifiedCustomer) { renderIdentificationScreen(); return; }
@@ -579,7 +854,7 @@ function addWeeklySuggestions() {
   if (!sessionToken || !catalogIsFromApi) { chatReply("Antes de adicionar sugestões, identifique o cliente e carregue o catálogo real do Supabase."); return; }
   const available = (currentRecommendations || []).filter(r => catalogProducts.some(p => String(p.id) === String(r.id))).slice(0, 3);
   if (!available.length) { chatReply("Não há recomendações vinculadas ao catálogo carregado. Abra o catálogo para escolher produtos."); return; }
-  const amounts = available.length >= 3 ? [100, 60, 40] : available.length === 2 ? [120, 80] : [200];
+  const amounts = recommendationBundleAmounts(available.length);
   available.forEach((recommendation, index) => addCartProduct(String(recommendation.id), amounts[index]));
   chatReply(`Adicionei ${available.length} produto(s) recomendado(s), totalizando ${amounts.slice(0, available.length).reduce((a, b) => a + b, 0)} fardos. Confira o carrinho antes de finalizar.`);
   $("chat-feedback").textContent = "Sugestões baseadas em recomendações reais da API.";
@@ -677,7 +952,10 @@ document.addEventListener("click", async event => {
   else if (el.id === "talk-seller") { chatReply("Tudo certo! Um vendedor Fruki entraria em contato para ajudar com valores e entrega."); $("chat-feedback").textContent="Contato com vendedor simulado — nenhuma mensagem foi enviada."; }
   else if (el.id === "phone-menu") showToast("Mais opções: demonstração do Pede Fruki.");
   else if (el.dataset.category) { activeCatalogCategory=el.dataset.category; renderCatalogScreen(); }
-  else if (el.dataset.qty) { addCartProduct(el.dataset.product, el.dataset.qty === "+" ? 10 : -10); renderCatalogScreen(); }
+  else if (el.dataset.qty) {
+    addCartProduct(el.dataset.product, el.dataset.qty === "+" ? 10 : -10);
+    el.closest(".cart-screen") ? renderCartScreen() : renderCatalogScreen();
+  }
   else if (el.dataset.reminderQty) {
     const reminderProduct = catalogProducts[0];
     if (reminderProduct) addCartProduct(String(reminderProduct.id), Number(el.dataset.reminderQty));
@@ -686,7 +964,7 @@ document.addEventListener("click", async event => {
   }
   else if (el.id === "catalog-back") renderCatalogScreen();
   else if (el.id === "checkout-button") {
-    if (cartTotal() < 200 || !sessionToken || !catalogIsFromApi) return;
+    if (cartTotal() < MINIMUM_ORDER_QUANTITY || !sessionToken || !catalogIsFromApi) return;
     const itens = Object.entries(cart).filter(([, quantidade]) => quantidade > 0).map(([produtoId, quantidade]) => ({ produtoId: Number(produtoId), quantidade }));
     if (itens.some(item => !Number.isInteger(item.produtoId))) {
       chatReply("Algum produto do carrinho não pertence ao catálogo real. Esvazie o carrinho, abra o catálogo novamente e escolha os produtos do Supabase.");

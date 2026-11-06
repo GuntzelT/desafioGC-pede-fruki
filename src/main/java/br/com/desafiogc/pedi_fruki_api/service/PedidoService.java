@@ -28,7 +28,7 @@ import java.util.Set;
 @Service
 @RequiredArgsConstructor
 public class PedidoService {
-    @Value("${app.pedidos.quantidade-minima:200}")
+    @Value("${app.pedidos.quantidade-minima:100}")
     private int quantidadeMinimaPedido;
 
     @Value("${app.estoque.baixar-no-pedido:true}")
